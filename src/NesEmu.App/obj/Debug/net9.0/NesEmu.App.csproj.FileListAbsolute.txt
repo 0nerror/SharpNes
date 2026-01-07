@@ -23,3 +23,4 @@
 /media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.App/bin/Debug/net9.0/runtimes/osx-x64/native/libSDL2.dylib
 /media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.App/bin/Debug/net9.0/runtimes/win-x64/native/SDL2.dll
 /media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.App/bin/Debug/net9.0/runtimes/win-x86/native/SDL2.dll
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.App/obj/Debug/net9.0/NesEmu.App.sourcelink.json
