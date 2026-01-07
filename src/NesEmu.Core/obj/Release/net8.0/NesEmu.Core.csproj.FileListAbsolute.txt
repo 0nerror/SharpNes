@@ -1,0 +1,11 @@
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/bin/Release/net8.0/NesEmu.Core.deps.json
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/bin/Release/net8.0/NesEmu.Core.dll
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/bin/Release/net8.0/NesEmu.Core.pdb
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Release/net8.0/NesEmu.Core.GeneratedMSBuildEditorConfig.editorconfig
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Release/net8.0/NesEmu.Core.AssemblyInfoInputs.cache
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Release/net8.0/NesEmu.Core.AssemblyInfo.cs
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Release/net8.0/NesEmu.Core.csproj.CoreCompileInputs.cache
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Release/net8.0/NesEmu.Core.dll
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Release/net8.0/refint/NesEmu.Core.dll
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Release/net8.0/NesEmu.Core.pdb
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Release/net8.0/ref/NesEmu.Core.dll

@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "TMaHB+a21/Q=",
+  "success": true,
+  "projectFilePath": "/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/NesEmu.Core.csproj",
+  "expectedPackageFiles": [
+    "/home/chris-grant/.nuget/packages/microsoft.netcore.app.ref/8.0.15/microsoft.netcore.app.ref.8.0.15.nupkg.sha512",
+    "/home/chris-grant/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.15/microsoft.aspnetcore.app.ref.8.0.15.nupkg.sha512"
+  ],
+  "logs": []
+}
