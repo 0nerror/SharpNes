@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using NativeFileDialogSharp;
 using SharpNes.Core;
 using SDL2;
 
@@ -9,23 +10,27 @@ static class Program
 {
     static int Main(string[] args)
     {
-        if (args.Length < 1)
+        // ROM path is now optional
+        string? romPath = args.Length >= 1 ? args[0] : null;
+
+        Bus? bus = null;
+        Cpu6502? cpu = null;
+        string? currentRomName = null;
+
+        // Load ROM if provided via command line
+        if (romPath != null)
         {
-            Console.WriteLine("Usage: dotnet run --project src/SharpNes.App/SharpNes.App.csproj -- <path-to-rom.nes>");
-            return 1;
+            if (!File.Exists(romPath))
+            {
+                Console.WriteLine($"ROM not found: {romPath}");
+                return 1;
+            }
+
+            if (!TryLoadRom(romPath, out bus, out cpu, out currentRomName))
+            {
+                return 1;
+            }
         }
-
-        string romPath = args[0];
-        if (!File.Exists(romPath))
-        {
-            Console.WriteLine($"ROM not found: {romPath}");
-            return 1;
-        }
-
-        byte[] romBytes = File.ReadAllBytes(romPath);
-        Cartridge cart = Cartridge.LoadINES(romBytes);
-
-        Console.WriteLine($"Loaded: {Path.GetFileName(romPath)} (Mapper {cart.MapperNumber})");
 
         // Initialize SDL
         if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_GAMECONTROLLER) < 0)
@@ -53,8 +58,9 @@ static class Program
 
         // Create window (3x scale)
         const int scale = 3;
+        string windowTitle = currentRomName != null ? $"SharpNes - {currentRomName}" : "SharpNes - Press F1 to Open ROM";
         IntPtr window = SDL.SDL_CreateWindow(
-            $"SharpNes - {Path.GetFileName(romPath)}",
+            windowTitle,
             SDL.SDL_WINDOWPOS_CENTERED,
             SDL.SDL_WINDOWPOS_CENTERED,
             256 * scale,
@@ -172,26 +178,14 @@ static class Program
             audioDevice = 0;
         }
 
-        // Set up emulator
-        var bus = new Bus();
-        bus.InsertCartridge(cart);
-
-        var cpu = new Cpu6502(bus);
-        cpu.Reset();
+        // Set up PPU sync callback if ROM is loaded
+        if (bus != null && cpu != null)
+        {
+            SetupPpuSyncCallback(bus, cpu);
+        }
 
         // Audio buffer
         float[] audioBuffer = new float[4096];
-
-        // PPU sync callback
-        bus.SyncPpuCallback = () =>
-        {
-            long currentExpectedPpu = (cpu.TotalCycles + 4) * 3;
-            long ppuBehind = currentExpectedPpu - bus.Ppu.TotalPpuCycles;
-            if (ppuBehind > 0)
-            {
-                bus.Ppu.TickMany(ppuBehind);
-            }
-        };
 
         bool running = true;
 
@@ -220,32 +214,59 @@ static class Program
                                 case SDL.SDL_Keycode.SDLK_ESCAPE:
                                     if (pressed) running = false;
                                     break;
+
+                                case SDL.SDL_Keycode.SDLK_F1:
+                                    if (pressed)
+                                    {
+                                        // Open file dialog
+                                        var result = Dialog.FileOpen("nes");
+                                        if (result.IsOk && !string.IsNullOrEmpty(result.Path))
+                                        {
+                                            if (TryLoadRom(result.Path, out bus, out cpu, out currentRomName))
+                                            {
+                                                SetupPpuSyncCallback(bus!, cpu!);
+                                                SDL.SDL_SetWindowTitle(window, $"SharpNes - {currentRomName}");
+
+                                                // Clear audio queue for clean start
+                                                if (audioDevice != 0)
+                                                {
+                                                    SDL.SDL_ClearQueuedAudio(audioDevice);
+                                                }
+
+                                                // Reset frame timing
+                                                frameTimer.Restart();
+                                                nextFrameTime = 0;
+                                            }
+                                        }
+                                    }
+                                    break;
+
                                 // Arrow keys for D-pad
                                 case SDL.SDL_Keycode.SDLK_UP:
-                                    bus.Controller1.SetButton(NesController.ButtonUp, pressed);
+                                    bus?.Controller1.SetButton(NesController.ButtonUp, pressed);
                                     break;
                                 case SDL.SDL_Keycode.SDLK_DOWN:
-                                    bus.Controller1.SetButton(NesController.ButtonDown, pressed);
+                                    bus?.Controller1.SetButton(NesController.ButtonDown, pressed);
                                     break;
                                 case SDL.SDL_Keycode.SDLK_LEFT:
-                                    bus.Controller1.SetButton(NesController.ButtonLeft, pressed);
+                                    bus?.Controller1.SetButton(NesController.ButtonLeft, pressed);
                                     break;
                                 case SDL.SDL_Keycode.SDLK_RIGHT:
-                                    bus.Controller1.SetButton(NesController.ButtonRight, pressed);
+                                    bus?.Controller1.SetButton(NesController.ButtonRight, pressed);
                                     break;
                                 // Z = A, X = B
                                 case SDL.SDL_Keycode.SDLK_x:
-                                    bus.Controller1.SetButton(NesController.ButtonA, pressed);
+                                    bus?.Controller1.SetButton(NesController.ButtonA, pressed);
                                     break;
                                 case SDL.SDL_Keycode.SDLK_z:
-                                    bus.Controller1.SetButton(NesController.ButtonB, pressed);
+                                    bus?.Controller1.SetButton(NesController.ButtonB, pressed);
                                     break;
                                 // Enter = Start, RShift = Select
                                 case SDL.SDL_Keycode.SDLK_RETURN:
-                                    bus.Controller1.SetButton(NesController.ButtonStart, pressed);
+                                    bus?.Controller1.SetButton(NesController.ButtonStart, pressed);
                                     break;
                                 case SDL.SDL_Keycode.SDLK_RSHIFT:
-                                    bus.Controller1.SetButton(NesController.ButtonSelect, pressed);
+                                    bus?.Controller1.SetButton(NesController.ButtonSelect, pressed);
                                     break;
                             }
                         }
@@ -253,6 +274,7 @@ static class Program
 
                     case SDL.SDL_EventType.SDL_JOYBUTTONDOWN:
                     case SDL.SDL_EventType.SDL_JOYBUTTONUP:
+                        if (bus != null)
                         {
                             bool pressed = e.type == SDL.SDL_EventType.SDL_JOYBUTTONDOWN;
                             byte btn = e.jbutton.button;
@@ -278,6 +300,7 @@ static class Program
                         break;
 
                     case SDL.SDL_EventType.SDL_JOYHATMOTION:
+                        if (bus != null)
                         {
                             // D-pad is typically a hat on Xbox controllers
                             byte hat = e.jhat.hatValue;
@@ -293,109 +316,121 @@ static class Program
 
             if (!running) break;
 
-            // Run CPU until frame is ready
-            long lastCpuCycles = cpu.TotalCycles;
-            try
+            // Only run emulation if ROM is loaded
+            if (bus != null && cpu != null)
             {
-                while (!bus.Ppu.FrameReady)
+                // Run CPU until frame is ready
+                long lastCpuCycles = cpu.TotalCycles;
+                try
                 {
-                    cpu.Step();
-
-                    // Calculate CPU cycles elapsed this step
-                    long cpuCyclesElapsed = cpu.TotalCycles - lastCpuCycles;
-                    lastCpuCycles = cpu.TotalCycles;
-
-                    // Handle OAM DMA
-                    if (bus.OamDmaRequested)
+                    while (!bus.Ppu.FrameReady)
                     {
-                        int dmaCycles = bus.ExecuteOamDma();
-                        // Account for DMA cycles in PPU timing
-                        bus.Ppu.TickMany(dmaCycles * 3);
-                        cpuCyclesElapsed += dmaCycles;
-                    }
+                        cpu.Step();
 
-                    // Catch up PPU
-                    long expectedPpu = cpu.TotalCycles * 3;
-                    long ppuBehind = expectedPpu - bus.Ppu.TotalPpuCycles;
-                    if (ppuBehind > 0)
-                    {
-                        bus.Ppu.TickMany(ppuBehind);
-                    }
+                        // Calculate CPU cycles elapsed this step
+                        long cpuCyclesElapsed = cpu.TotalCycles - lastCpuCycles;
+                        lastCpuCycles = cpu.TotalCycles;
 
-                    // Tick APU with actual CPU cycles
-                    bus.Apu.Tick((int)cpuCyclesElapsed);
-
-                    // Check for NMI
-                    if (bus.Ppu.TryConsumeNmi())
-                    {
-                        cpu.Nmi();
-                    }
-
-                    // Check for mapper IRQ (MMC3)
-                    if (bus.MapperIrqPending)
-                    {
-                        bus.AcknowledgeMapperIrq();
-                        cpu.Irq();
-                    }
-                }
-
-                bus.Ppu.FrameReady = false;
-
-                // Update texture with framebuffer
-                unsafe
-                {
-                    fixed (byte* pixels = bus.Ppu.Framebuffer)
-                    {
-                        SDL.SDL_UpdateTexture(texture, IntPtr.Zero, (IntPtr)pixels, 256 * 4);
-                    }
-                }
-
-                // Render
-                SDL.SDL_RenderClear(renderer);
-                SDL.SDL_RenderCopy(renderer, texture, IntPtr.Zero, IntPtr.Zero);
-                SDL.SDL_RenderPresent(renderer);
-
-                // Queue audio samples (limit buffer to reduce latency)
-                if (audioDevice != 0)
-                {
-                    uint queued = SDL.SDL_GetQueuedAudioSize(audioDevice);
-                    uint maxQueued = 44100 * sizeof(float) / 15; // ~66ms max latency
-
-                    if (queued < maxQueued)
-                    {
-                        int samples = bus.Apu.GetSamples(audioBuffer, audioBuffer.Length);
-                        if (samples > 0)
+                        // Handle OAM DMA
+                        if (bus.OamDmaRequested)
                         {
-                            unsafe
+                            int dmaCycles = bus.ExecuteOamDma();
+                            // Account for DMA cycles in PPU timing
+                            bus.Ppu.TickMany(dmaCycles * 3);
+                            cpuCyclesElapsed += dmaCycles;
+                        }
+
+                        // Catch up PPU
+                        long expectedPpu = cpu.TotalCycles * 3;
+                        long ppuBehind = expectedPpu - bus.Ppu.TotalPpuCycles;
+                        if (ppuBehind > 0)
+                        {
+                            bus.Ppu.TickMany(ppuBehind);
+                        }
+
+                        // Tick APU with actual CPU cycles
+                        bus.Apu.Tick((int)cpuCyclesElapsed);
+
+                        // Check for NMI
+                        if (bus.Ppu.TryConsumeNmi())
+                        {
+                            cpu.Nmi();
+                        }
+
+                        // Check for mapper IRQ (MMC3)
+                        if (bus.MapperIrqPending)
+                        {
+                            bus.AcknowledgeMapperIrq();
+                            cpu.Irq();
+                        }
+                    }
+
+                    bus.Ppu.FrameReady = false;
+
+                    // Update texture with framebuffer
+                    unsafe
+                    {
+                        fixed (byte* pixels = bus.Ppu.Framebuffer)
+                        {
+                            SDL.SDL_UpdateTexture(texture, IntPtr.Zero, (IntPtr)pixels, 256 * 4);
+                        }
+                    }
+
+                    // Render
+                    SDL.SDL_RenderClear(renderer);
+                    SDL.SDL_RenderCopy(renderer, texture, IntPtr.Zero, IntPtr.Zero);
+                    SDL.SDL_RenderPresent(renderer);
+
+                    // Queue audio samples (limit buffer to reduce latency)
+                    if (audioDevice != 0)
+                    {
+                        uint queued = SDL.SDL_GetQueuedAudioSize(audioDevice);
+                        uint maxQueued = 44100 * sizeof(float) / 15; // ~66ms max latency
+
+                        if (queued < maxQueued)
+                        {
+                            int samples = bus.Apu.GetSamples(audioBuffer, audioBuffer.Length);
+                            if (samples > 0)
                             {
-                                fixed (float* ptr = audioBuffer)
+                                unsafe
                                 {
-                                    SDL.SDL_QueueAudio(audioDevice, (IntPtr)ptr, (uint)(samples * sizeof(float)));
+                                    fixed (float* ptr = audioBuffer)
+                                    {
+                                        SDL.SDL_QueueAudio(audioDevice, (IntPtr)ptr, (uint)(samples * sizeof(float)));
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // Frame timing - wait until next frame time
-                nextFrameTime += targetFrameTime;
-                double currentTime = frameTimer.Elapsed.TotalMilliseconds;
-                double sleepTime = nextFrameTime - currentTime;
-                if (sleepTime > 0)
-                {
-                    Thread.Sleep((int)sleepTime);
+                    // Frame timing - wait until next frame time
+                    nextFrameTime += targetFrameTime;
+                    double currentTime = frameTimer.Elapsed.TotalMilliseconds;
+                    double sleepTime = nextFrameTime - currentTime;
+                    if (sleepTime > 0)
+                    {
+                        Thread.Sleep((int)sleepTime);
+                    }
+                    else if (sleepTime < -100)
+                    {
+                        // If we're way behind, reset timing
+                        nextFrameTime = currentTime;
+                    }
                 }
-                else if (sleepTime < -100)
+                catch (Exception ex)
                 {
-                    // If we're way behind, reset timing
-                    nextFrameTime = currentTime;
+                    Console.WriteLine($"Emulation error: {ex.Message}");
+                    Console.WriteLine($"PC=${cpu.PC:X4} A=${cpu.A:X2} X=${cpu.X:X2} Y=${cpu.Y:X2}");
+                    running = false;
                 }
             }
-            catch (Exception ex)
+            else
             {
-                Console.WriteLine($"Emulation error: {ex.Message}");
-                Console.WriteLine($"PC=${cpu.PC:X4} A=${cpu.A:X2} X=${cpu.X:X2} Y=${cpu.Y:X2}");
-                running = false;
+                // No ROM loaded - render black screen and wait
+                SDL.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+                SDL.SDL_RenderClear(renderer);
+                SDL.SDL_RenderPresent(renderer);
+                Thread.Sleep(16); // ~60fps idle
             }
         }
 
@@ -410,5 +445,47 @@ static class Program
         SDL.SDL_Quit();
 
         return 0;
+    }
+
+    static bool TryLoadRom(string romPath, out Bus? bus, out Cpu6502? cpu, out string? romName)
+    {
+        bus = null;
+        cpu = null;
+        romName = null;
+
+        try
+        {
+            byte[] romBytes = File.ReadAllBytes(romPath);
+            Cartridge cart = Cartridge.LoadINES(romBytes);
+
+            romName = Path.GetFileName(romPath);
+            Console.WriteLine($"Loaded: {romName} (Mapper {cart.MapperNumber})");
+
+            bus = new Bus();
+            bus.InsertCartridge(cart);
+
+            cpu = new Cpu6502(bus);
+            cpu.Reset();
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load ROM: {ex.Message}");
+            return false;
+        }
+    }
+
+    static void SetupPpuSyncCallback(Bus bus, Cpu6502 cpu)
+    {
+        bus.SyncPpuCallback = () =>
+        {
+            long currentExpectedPpu = (cpu.TotalCycles + 4) * 3;
+            long ppuBehind = currentExpectedPpu - bus.Ppu.TotalPpuCycles;
+            if (ppuBehind > 0)
+            {
+                bus.Ppu.TickMany(ppuBehind);
+            }
+        };
     }
 }

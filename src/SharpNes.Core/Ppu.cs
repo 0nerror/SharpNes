@@ -437,9 +437,10 @@ public sealed class Ppu
             _ppustatus &= 0x1F;
         }
 
-        // MMC3 scanline IRQ callback hook you already had (keep it)
-        // A lot of emulators use cycle 260 on visible lines when rendering enabled.
-        if (Scanline < 240 && ((_ppumask & 0x18) != 0) && Cycle == 260)
+        // MMC3 scanline IRQ callback - called when A12 rises during sprite fetch
+        // This happens on visible scanlines (0-239) AND pre-render scanline (261)
+        // when rendering is enabled. Cycle 260 approximates when sprite fetches occur.
+        if ((isVisibleLine || isPreRenderLine) && renderingEnabled && Cycle == 260)
         {
             _scanlineCallback?.Invoke();
         }
@@ -578,8 +579,7 @@ public sealed class Ppu
                 if (i == 0) _sprite0OnScanline = true;
 
                 _sprIndex[_sprCount] = (byte)i;
-                // Add 1 because we decrement X before checking in the render loop
-                _sprX[_sprCount] = (byte)(spriteX + 1);
+                _sprX[_sprCount] = spriteX;
                 _sprAttr[_sprCount] = attr;
 
                 // Apply vertical flip to row

@@ -14,6 +14,10 @@ public sealed class Mapper4_MMC3 : IMapper
     private readonly int _chrBanks;
     private readonly byte[] _prgRam = new byte[8192];
 
+    // Bank masks for proper wrapping
+    private readonly int _prgBankMask;  // Mask for 8KB PRG banks
+    private readonly int _chrBankMask;  // Mask for 1KB CHR banks
+
     // Bank registers
     private readonly int[] _bankRegisters = new int[8];
     private int _bankSelect;
@@ -38,6 +42,15 @@ public sealed class Mapper4_MMC3 : IMapper
         _chr = chrRomOrRam ?? throw new ArgumentNullException(nameof(chrRomOrRam));
         _prgBanks = prgBanks;
         _chrBanks = chrBanks;
+
+        // Calculate PRG bank mask (8KB banks = prgBanks * 2 since prgBanks is 16KB count)
+        int num8KBanks = prgBanks * 2;
+        _prgBankMask = num8KBanks > 0 ? num8KBanks - 1 : 0;
+
+        // Calculate CHR bank mask (1KB banks = chrBanks * 8 since chrBanks is 8KB count)
+        // For CHR RAM (chrBanks == 0), use 8KB = 8 1KB banks
+        int num1KBanks = chrBanks > 0 ? chrBanks * 8 : 8;
+        _chrBankMask = num1KBanks - 1;
 
         // Initialize bank registers
         _bankRegisters[0] = 0;
@@ -70,22 +83,22 @@ public sealed class Mapper4_MMC3 : IMapper
             if (addr < 0xA000)
             {
                 // $8000-$9FFF
-                bank = _prgBankMode ? (_prgBanks * 2 - 2) : _bankRegisters[6];
+                bank = _prgBankMode ? (_prgBankMask - 1) : (_bankRegisters[6] & _prgBankMask);
             }
             else if (addr < 0xC000)
             {
                 // $A000-$BFFF
-                bank = _bankRegisters[7];
+                bank = _bankRegisters[7] & _prgBankMask;
             }
             else if (addr < 0xE000)
             {
                 // $C000-$DFFF
-                bank = _prgBankMode ? _bankRegisters[6] : (_prgBanks * 2 - 2);
+                bank = _prgBankMode ? (_bankRegisters[6] & _prgBankMask) : (_prgBankMask - 1);
             }
             else
             {
                 // $E000-$FFFF - Fixed to last bank
-                bank = _prgBanks * 2 - 1;
+                bank = _prgBankMask;
             }
 
             int prgOffset = bank * 0x2000 + offset;
@@ -211,7 +224,7 @@ public sealed class Mapper4_MMC3 : IMapper
             region ^= 4;
         }
 
-        return region switch
+        int bank = region switch
         {
             0 => _bankRegisters[0] & 0xFE,       // R0 (2KB, bit 0 ignored)
             1 => (_bankRegisters[0] & 0xFE) + 1,
@@ -223,6 +236,9 @@ public sealed class Mapper4_MMC3 : IMapper
             7 => _bankRegisters[5],              // R5 (1KB)
             _ => 0
         };
+
+        // Mask bank to actual CHR size
+        return bank & _chrBankMask;
     }
 
     /// <summary>
