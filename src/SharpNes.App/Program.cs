@@ -234,10 +234,10 @@ static class Program
                                     bus.Controller1.SetButton(NesController.ButtonRight, pressed);
                                     break;
                                 // Z = A, X = B
-                                case SDL.SDL_Keycode.SDLK_z:
+                                case SDL.SDL_Keycode.SDLK_x:
                                     bus.Controller1.SetButton(NesController.ButtonA, pressed);
                                     break;
-                                case SDL.SDL_Keycode.SDLK_x:
+                                case SDL.SDL_Keycode.SDLK_z:
                                     bus.Controller1.SetButton(NesController.ButtonB, pressed);
                                     break;
                                 // Enter = Start, RShift = Select
