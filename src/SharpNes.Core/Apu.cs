@@ -481,9 +481,11 @@ public sealed class Apu
             noise = bit * volume / 15.0f;
         }
 
-        // Mix channels (simple linear mix with DMC)
+        // Mix channels using NES nonlinear mixing approximation
+        // Adjusted to better balance triangle/noise against pulse channels
         float pulseOut = 0.00752f * (pulse1 + pulse2) * 15.0f;
-        float tndOut = 0.00851f * triangle * 15.0f + 0.00494f * noise * 15.0f + 0.00335f * dmc * 127.0f;
+        // Reduce triangle (bass) to 60% and noise (drums) to 75% for better balance
+        float tndOut = 0.00851f * triangle * 15.0f * 0.6f + 0.00494f * noise * 15.0f * 0.75f + 0.00335f * dmc * 127.0f;
         float sample = pulseOut + tndOut;
 
         // Clamp

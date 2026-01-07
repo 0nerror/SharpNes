@@ -241,6 +241,49 @@ static class Program
                                     }
                                     break;
 
+                                case SDL.SDL_Keycode.SDLK_F2:
+                                    if (pressed && cpu != null)
+                                    {
+                                        // Reset - like pressing the reset button on the NES
+                                        cpu.Reset();
+                                        Console.WriteLine("Reset");
+
+                                        // Clear audio queue for clean start
+                                        if (audioDevice != 0)
+                                        {
+                                            SDL.SDL_ClearQueuedAudio(audioDevice);
+                                        }
+
+                                        // Reset frame timing
+                                        frameTimer.Restart();
+                                        nextFrameTime = 0;
+                                    }
+                                    break;
+
+                                case SDL.SDL_Keycode.SDLK_F3:
+                                    if (pressed && bus != null)
+                                    {
+                                        // Stop - unload ROM and return to idle state
+                                        bus = null;
+                                        cpu = null;
+                                        currentRomName = null;
+                                        Console.WriteLine("Stopped - ROM unloaded");
+
+                                        // Clear audio queue
+                                        if (audioDevice != 0)
+                                        {
+                                            SDL.SDL_ClearQueuedAudio(audioDevice);
+                                        }
+
+                                        // Update window title
+                                        SDL.SDL_SetWindowTitle(window, "SharpNes - Press F1 to Open ROM");
+
+                                        // Reset frame timing
+                                        frameTimer.Restart();
+                                        nextFrameTime = 0;
+                                    }
+                                    break;
+
                                 // Arrow keys for D-pad
                                 case SDL.SDL_Keycode.SDLK_UP:
                                     bus?.Controller1.SetButton(NesController.ButtonUp, pressed);
