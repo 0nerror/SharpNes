@@ -51,7 +51,13 @@ public sealed class Bus
             },
             () => _cart.GetMirrorMode()
         );
+        // Wire up scanline counter for MMC3
+        Ppu.SetScanlineCallback(() => _cart.NotifyScanline());
     }
+
+    public bool MapperIrqPending => _cart?.IrqPending() ?? false;
+
+    public void AcknowledgeMapperIrq() => _cart?.AcknowledgeIrq();
 
     public byte CpuRead(ushort addr)
     {

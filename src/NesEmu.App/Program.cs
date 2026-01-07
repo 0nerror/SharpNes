@@ -330,6 +330,13 @@ static class Program
                     {
                         cpu.Nmi();
                     }
+
+                    // Check for mapper IRQ (MMC3)
+                    if (bus.MapperIrqPending)
+                    {
+                        bus.AcknowledgeMapperIrq();
+                        cpu.Irq();
+                    }
                 }
 
                 bus.Ppu.FrameReady = false;

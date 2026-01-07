@@ -19,6 +19,7 @@ public sealed class Ppu
     private Func<ushort, byte>? _readChr;
     private Action<ushort, byte>? _writeChr;
     private Func<int>? _getMirrorMode;
+    private Action? _scanlineCallback;
 
     // Registers
     private byte _ppuctrl;     // $2000
@@ -66,6 +67,11 @@ public sealed class Ppu
         _readChr = readChr;
         _writeChr = writeChr;
         _getMirrorMode = getMirrorMode;
+    }
+
+    public void SetScanlineCallback(Action callback)
+    {
+        _scanlineCallback = callback;
     }
 
     public byte DebugStatusNoSideEffects()
@@ -294,6 +300,12 @@ public sealed class Ppu
                 if (Cycle == 257)
                 {
                     _v = (ushort)((_v & 0x7BE0) | (_t & 0x041F));
+                }
+
+                // MMC3 scanline counter - trigger at cycle 260
+                if (Cycle == 260)
+                {
+                    _scanlineCallback?.Invoke();
                 }
             }
         }

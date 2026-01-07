@@ -64,6 +64,34 @@ public sealed class Cartridge
         return VerticalMirroring ? 2 : 3;
     }
 
+    // -----------------------------
+    // Scanline counter for MMC3
+    // -----------------------------
+    public void NotifyScanline()
+    {
+        if (Mapper is Mapper4_MMC3 mmc3)
+        {
+            mmc3.ScanlineCounter();
+        }
+    }
+
+    public bool IrqPending()
+    {
+        if (Mapper is Mapper4_MMC3 mmc3)
+        {
+            return mmc3.IrqPending;
+        }
+        return false;
+    }
+
+    public void AcknowledgeIrq()
+    {
+        if (Mapper is Mapper4_MMC3 mmc3)
+        {
+            mmc3.AcknowledgeIrq();
+        }
+    }
+
     public static Cartridge LoadINES(byte[] romBytes)
     {
         if (romBytes.Length < 16)
@@ -120,6 +148,11 @@ public sealed class Cartridge
             0 => new Mapper0_Nrom(prgRom, chr, prgBanks, chrBanks),
             1 => new Mapper1_MMC1(prgRom, chr, prgBanks, chrBanks),
             2 => new Mapper2_UxROM(prgRom, chr, prgBanks, chrBanks),
+            3 => new Mapper3_CNROM(prgRom, chr, prgBanks, chrBanks),
+            4 => new Mapper4_MMC3(prgRom, chr, prgBanks, chrBanks),
+            7 => new Mapper7_AxROM(prgRom, chr, prgBanks, chrBanks),
+            9 => new Mapper9_MMC2(prgRom, chr, prgBanks, chrBanks),
+            66 => new Mapper66_GxROM(prgRom, chr, prgBanks, chrBanks),
             _ => throw new NotSupportedException($"Mapper {mapper} not supported yet.")
         };
 

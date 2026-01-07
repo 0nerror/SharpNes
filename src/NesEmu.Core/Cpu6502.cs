@@ -88,6 +88,30 @@ public sealed class Cpu6502
         TotalCycles += 7;
     }
 
+    // IRQ support (maskable interrupt)
+    public void Irq()
+    {
+        // IRQ is ignored if I flag is set
+        if ((P & StatusFlags.I) != 0)
+            return;
+
+        // Push PC high then low
+        Push((byte)((PC >> 8) & 0xFF));
+        Push((byte)(PC & 0xFF));
+
+        // Push status with B cleared, U set
+        StatusFlags pushed = (P | StatusFlags.U) & ~StatusFlags.B;
+        Push((byte)pushed);
+
+        SetFlag(StatusFlags.I, true);
+
+        byte lo = Read(0xFFFE);
+        byte hi = Read(0xFFFF);
+        PC = (ushort)(lo | (hi << 8));
+
+        TotalCycles += 7;
+    }
+
     public void Step()
     {
         ushort pcBefore = PC;
