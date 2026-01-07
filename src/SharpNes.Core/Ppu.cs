@@ -52,6 +52,34 @@ public sealed class Ppu
     // NMI
     private bool _nmiPending;
 
+    // ------------------------------------------------------------
+    // Background fetch pipeline (shifters)
+    // ------------------------------------------------------------
+    private ushort _bgShiftPatternLo;
+    private ushort _bgShiftPatternHi;
+    private ushort _bgShiftAttrLo;
+    private ushort _bgShiftAttrHi;
+
+    private byte _bgNextTileId;
+    private byte _bgNextTileAttr;
+    private byte _bgNextTileLsb;
+    private byte _bgNextTileMsb;
+
+    // ------------------------------------------------------------
+    // Sprite scanline evaluation (up to 8 sprites)
+    // ------------------------------------------------------------
+    private const int MaxSpritesPerScanline = 8;
+
+    private readonly byte[] _sprX = new byte[MaxSpritesPerScanline];
+    private readonly byte[] _sprAttr = new byte[MaxSpritesPerScanline];
+    private readonly byte[] _sprIndex = new byte[MaxSpritesPerScanline];
+
+    private readonly byte[] _sprShiftLo = new byte[MaxSpritesPerScanline];
+    private readonly byte[] _sprShiftHi = new byte[MaxSpritesPerScanline];
+
+    private int _sprCount;
+    private bool _sprite0OnScanline;
+
     // NES color palette (64 colors, RGB values)
     private static readonly uint[] NesPalette = {
         0xFF545454, 0xFF001E74, 0xFF081090, 0xFF300088, 0xFF440064, 0xFF5C0030, 0xFF540400, 0xFF3C1800,
@@ -103,6 +131,7 @@ public sealed class Ppu
                     Status2002Reads++;
                     if ((_ppustatus & 0x80) != 0)
                         Status2002ReadsWithVBlank++;
+
                     _ppustatus &= 0x7F; // Clear VBlank flag
                     _w = false;         // Reset write toggle
                 }
@@ -127,6 +156,7 @@ public sealed class Ppu
                     if (!peek)
                         _ppudataBuffer = ReadVram((ushort)((_v & 0x3FFF) - 0x1000));
                 }
+
                 if (!peek)
                     _v = (ushort)((_v + ((_ppuctrl & 0x04) != 0 ? 32 : 1)) & 0x7FFF);
                 break;
@@ -151,7 +181,7 @@ public sealed class Ppu
         {
             case 0x0: // $2000 PPUCTRL
                 _ppuctrl = value;
-                _t = (ushort)((_t & 0xF3FF) | ((value & 0x03) << 10)); // Nametable select
+                _t = (ushort)((_t & 0xF3FF) | ((value & 0x03) << 10)); // Nametable select bits into t
                 break;
 
             case 0x1: // $2001 PPUMASK
@@ -219,7 +249,7 @@ public sealed class Ppu
 
         if (addr < 0x2000)
         {
-            // Pattern tables: read from CHR ROM/RAM
+            // Pattern tables: read from CHR ROM/RAM (mapper sees these reads)
             return _readChr?.Invoke(addr) ?? 0;
         }
         else if (addr < 0x3F00)
@@ -278,64 +308,143 @@ public sealed class Ppu
         }
     }
 
+    // ------------------------------------------------------------
+    // PPU ticking & rendering
+    // ------------------------------------------------------------
     public void Tick()
     {
-        bool renderingEnabled = (_ppumask & 0x18) != 0;
+        bool renderingEnabled = (_ppumask & 0x18) != 0; // bg or sprites
 
-        // Visible scanlines (0-239)
-        if (Scanline < 240)
+        // Visible scanlines: 0-239
+        // Pre-render scanline: 261
+        bool isVisibleLine = Scanline >= 0 && Scanline <= 239;
+        bool isPreRenderLine = Scanline == 261;
+        bool isRenderLine = isVisibleLine || isPreRenderLine;
+
+        // --------------------------------------------------------
+        // Render pipeline (background fetches + sprite shifters)
+        // --------------------------------------------------------
+        // --------------------------------------------------------
+        // Pixel output FIRST (before shifting) - only on visible scanlines, cycles 1..256
+        // --------------------------------------------------------
+        if (isVisibleLine && Cycle >= 1 && Cycle <= 256)
         {
-            if (Cycle >= 1 && Cycle <= 256)
+            RenderPixelFromShifters();
+        }
+
+        if (renderingEnabled && isRenderLine)
+        {
+            // Cycles that do fetches: 1-256 and 321-336
+            bool doFetch = (Cycle >= 1 && Cycle <= 256) || (Cycle >= 321 && Cycle <= 336);
+
+            if (doFetch)
             {
-                RenderPixel();
+                // Shift background shifters every cycle (AFTER rendering)
+                UpdateBackgroundShifters();
+
+                // Sprite shifters only update during visible portion (1-256), not prefetch (321-336)
+                if (Cycle <= 256)
+                    UpdateSpriteShifters();
+
+                // Background fetch pipeline (8-cycle sequence)
+                // Real NES timing:
+                // cycle%8 == 1: fetch nametable byte
+                // cycle%8 == 3: fetch attribute byte
+                // cycle%8 == 5: fetch low pattern byte
+                // cycle%8 == 7: fetch high pattern byte
+                // cycle%8 == 0: load shifters into low byte, increment coarse X
+                switch (Cycle & 0x07)
+                {
+                    case 1:
+                        // Fetch nametable byte at START of 8-cycle sequence
+                        _bgNextTileId = ReadVram((ushort)(0x2000 | (_v & 0x0FFF)));
+                        break;
+
+                    case 3:
+                        // Attribute address
+                        {
+                            ushort attrAddr = (ushort)(0x23C0
+                                | (_v & 0x0C00)
+                                | ((_v >> 4) & 0x38)
+                                | ((_v >> 2) & 0x07));
+
+                            byte attr = ReadVram(attrAddr);
+
+                            // Select quadrant
+                            int shift = (int)(((_v >> 5) & 0x02) << 1) | (int)((_v & 0x02));
+                            _bgNextTileAttr = (byte)((attr >> shift) & 0x03);
+                        }
+                        break;
+
+                    case 5:
+                        // Pattern low
+                        {
+                            ushort bgPatternBase = (ushort)((_ppuctrl & 0x10) != 0 ? 0x1000 : 0x0000); // BG = bit4
+                            ushort fineY = (ushort)((_v >> 12) & 0x07);
+                            ushort addr = (ushort)(bgPatternBase + (_bgNextTileId << 4) + fineY);
+                            _bgNextTileLsb = ReadVram(addr);
+                        }
+                        break;
+
+                    case 7:
+                        // Pattern high
+                        {
+                            ushort bgPatternBase = (ushort)((_ppuctrl & 0x10) != 0 ? 0x1000 : 0x0000); // BG = bit4
+                            ushort fineY = (ushort)((_v >> 12) & 0x07);
+                            ushort addr = (ushort)(bgPatternBase + (_bgNextTileId << 4) + fineY);
+                            _bgNextTileMsb = ReadVram((ushort)(addr + 8));
+                        }
+                        break;
+
+                    case 0:
+                        // End of 8-cycle sequence: load shifters and increment coarse X
+                        LoadBackgroundShifters();
+                        IncrementCoarseX();
+                        break;
+                }
             }
 
-            if (renderingEnabled)
+            // End of visible tile fetch region
+            if (Cycle == 256)
             {
-                // Increment fine Y at cycle 256
-                if (Cycle == 256)
-                {
-                    IncrementFineY();
-                }
+                IncrementFineY();
+            }
 
-                // Copy horizontal bits from t to v at cycle 257
-                if (Cycle == 257)
-                {
-                    _v = (ushort)((_v & 0x7BE0) | (_t & 0x041F));
-                }
+            if (Cycle == 257)
+            {
+                // Copy horizontal bits from t to v
+                _v = (ushort)((_v & 0x7BE0) | (_t & 0x041F));
 
-                // MMC3 scanline counter - trigger at cycle 260
-                if (Cycle == 260)
-                {
-                    _scanlineCallback?.Invoke();
-                }
+                // Evaluate sprites for next scanline
+                // On visible lines (0-239) and pre-render (261), evaluate for next scanline
+                if (isVisibleLine || isPreRenderLine)
+                    EvaluateSpritesForNextScanline();
+            }
+
+            // Copy vertical bits during pre-render line
+            if (isPreRenderLine && Cycle >= 280 && Cycle <= 304)
+            {
+                _v = (ushort)((_v & 0x041F) | (_t & 0x7BE0));
             }
         }
 
-        // Pre-render scanline (261)
-        if (Scanline == 261)
+        // --------------------------------------------------------
+        // Status flags handling
+        // --------------------------------------------------------
+        if (isPreRenderLine && Cycle == 1)
         {
-            if (Cycle == 1)
-            {
-                _ppustatus &= 0x1F; // Clear VBlank, sprite 0 hit, sprite overflow
-            }
-
-            if (renderingEnabled)
-            {
-                // Copy horizontal bits from t to v at cycle 257
-                if (Cycle == 257)
-                {
-                    _v = (ushort)((_v & 0x7BE0) | (_t & 0x041F));
-                }
-
-                // Copy vertical bits from t to v at cycles 280-304
-                if (Cycle >= 280 && Cycle <= 304)
-                {
-                    _v = (ushort)((_v & 0x041F) | (_t & 0x7BE0));
-                }
-            }
+            // Clear vblank, sprite0hit, overflow
+            _ppustatus &= 0x1F;
         }
 
+        // MMC3 scanline IRQ callback hook you already had (keep it)
+        // A lot of emulators use cycle 260 on visible lines when rendering enabled.
+        if (Scanline < 240 && ((_ppumask & 0x18) != 0) && Cycle == 260)
+        {
+            _scanlineCallback?.Invoke();
+        }
+
+        // Advance timing
         Cycle++;
         TotalPpuCycles++;
 
@@ -357,24 +466,70 @@ public sealed class Ppu
         }
     }
 
+    public void TickMany(long ticks)
+    {
+        for (long i = 0; i < ticks; i++)
+            Tick();
+    }
+
+    // ------------------------------------------------------------
+    // Background helpers
+    // ------------------------------------------------------------
+    private void UpdateBackgroundShifters()
+    {
+        bool renderBg = (_ppumask & 0x08) != 0;
+        if (!renderBg) return;
+
+        _bgShiftPatternLo <<= 1;
+        _bgShiftPatternHi <<= 1;
+        _bgShiftAttrLo <<= 1;
+        _bgShiftAttrHi <<= 1;
+    }
+
+    private void LoadBackgroundShifters()
+    {
+        bool renderBg = (_ppumask & 0x08) != 0;
+        if (!renderBg) return;
+
+        _bgShiftPatternLo = (ushort)((_bgShiftPatternLo & 0xFF00) | _bgNextTileLsb);
+        _bgShiftPatternHi = (ushort)((_bgShiftPatternHi & 0xFF00) | _bgNextTileMsb);
+
+        // Attribute becomes two bits, replicated across the 8 pixels of the tile
+        _bgShiftAttrLo = (ushort)((_bgShiftAttrLo & 0xFF00) | ((_bgNextTileAttr & 0x01) != 0 ? 0xFF : 0x00));
+        _bgShiftAttrHi = (ushort)((_bgShiftAttrHi & 0xFF00) | ((_bgNextTileAttr & 0x02) != 0 ? 0xFF : 0x00));
+    }
+
+    private void IncrementCoarseX()
+    {
+        if ((_v & 0x001F) == 31)
+        {
+            _v &= 0xFFE0;
+            _v ^= 0x0400; // switch horizontal nametable
+        }
+        else
+        {
+            _v++;
+        }
+    }
+
     private void IncrementFineY()
     {
         if ((_v & 0x7000) != 0x7000)
         {
-            _v += 0x1000;       // Increment fine Y
+            _v += 0x1000; // fine Y++
         }
         else
         {
-            _v &= 0x0FFF;       // Fine Y = 0
+            _v &= 0x0FFF; // fine Y = 0
             int coarseY = (_v & 0x03E0) >> 5;
             if (coarseY == 29)
             {
                 coarseY = 0;
-                _v ^= 0x0800;   // Switch vertical nametable
+                _v ^= 0x0800; // switch vertical nametable
             }
             else if (coarseY == 31)
             {
-                coarseY = 0;    // Wrap without switching nametable
+                coarseY = 0;
             }
             else
             {
@@ -384,177 +539,260 @@ public sealed class Ppu
         }
     }
 
-    public void TickMany(long ticks)
+    // ------------------------------------------------------------
+    // Sprite helpers
+    // ------------------------------------------------------------
+    private void EvaluateSpritesForNextScanline()
     {
-        for (long i = 0; i < ticks; i++)
-            Tick();
+        _sprCount = 0;
+        _sprite0OnScanline = false;
+
+        bool renderSprites = (_ppumask & 0x10) != 0;
+        if (!renderSprites)
+            return;
+
+        int spriteHeight = (_ppuctrl & 0x20) != 0 ? 16 : 8;
+
+        // Clear overflow flag (we'll set it if >8)
+        _ppustatus &= 0xDF;
+
+        // We're evaluating for the NEXT scanline (sprites fetched at cycle 257 are used next line)
+        // On pre-render line (261), next scanline is 0
+        int nextScanline = (Scanline == 261) ? 0 : (Scanline + 1);
+
+        for (int i = 0; i < 64; i++)
+        {
+            int o = i * 4;
+            int spriteY = _oam[o + 0];
+            int tileIndex = _oam[o + 1];
+            byte attr = _oam[o + 2];
+            byte spriteX = _oam[o + 3];
+
+            // Check if sprite is visible on the next scanline
+            int row = nextScanline - (spriteY + 1);
+            if (row < 0 || row >= spriteHeight)
+                continue;
+
+            if (_sprCount < MaxSpritesPerScanline)
+            {
+                if (i == 0) _sprite0OnScanline = true;
+
+                _sprIndex[_sprCount] = (byte)i;
+                // Add 1 because we decrement X before checking in the render loop
+                _sprX[_sprCount] = (byte)(spriteX + 1);
+                _sprAttr[_sprCount] = attr;
+
+                // Apply vertical flip to row
+                if ((attr & 0x80) != 0)
+                    row = spriteHeight - 1 - row;
+
+                // Fetch pattern bytes for this sprite row (once per scanline)
+                byte lo, hi;
+                FetchSpritePatternBytes(tileIndex, row, spriteHeight, out lo, out hi);
+
+                // If horizontal flip, reverse bits
+                if ((attr & 0x40) != 0)
+                {
+                    lo = ReverseBits(lo);
+                    hi = ReverseBits(hi);
+                }
+
+                _sprShiftLo[_sprCount] = lo;
+                _sprShiftHi[_sprCount] = hi;
+
+                _sprCount++;
+            }
+            else
+            {
+                // More than 8 sprites on scanline => sprite overflow
+                _ppustatus |= 0x20;
+                break;
+            }
+        }
     }
 
-    private void RenderPixel()
+    private void FetchSpritePatternBytes(int tileIndex, int row, int spriteHeight, out byte lo, out byte hi)
+    {
+        if (spriteHeight == 16)
+        {
+            // 8x16: bit0 selects pattern table, tileIndex&FE is tile number
+            ushort base16 = (ushort)((tileIndex & 0x01) != 0 ? 0x1000 : 0x0000);
+            int tileNum = tileIndex & 0xFE;
+            if (row >= 8)
+            {
+                tileNum++;
+                row -= 8;
+            }
+
+            ushort addr = (ushort)(base16 + (tileNum << 4) + row);
+            lo = ReadVram(addr);
+            hi = ReadVram((ushort)(addr + 8));
+        }
+        else
+        {
+            // 8x8: sprite pattern table is PPUCTRL bit3 (0x08)
+            ushort sprBase = (ushort)((_ppuctrl & 0x08) != 0 ? 0x1000 : 0x0000);
+            ushort addr = (ushort)(sprBase + (tileIndex << 4) + row);
+            lo = ReadVram(addr);
+            hi = ReadVram((ushort)(addr + 8));
+        }
+    }
+
+    private void UpdateSpriteShifters()
+    {
+        bool renderSprites = (_ppumask & 0x10) != 0;
+        if (!renderSprites) return;
+
+        for (int i = 0; i < _sprCount; i++)
+        {
+            if (_sprX[i] > 0)
+            {
+                _sprX[i]--;
+            }
+            else
+            {
+                _sprShiftLo[i] <<= 1;
+                _sprShiftHi[i] <<= 1;
+            }
+        }
+    }
+
+    private static byte ReverseBits(byte b)
+    {
+        // 8-bit reverse
+        b = (byte)((b & 0xF0) >> 4 | (b & 0x0F) << 4);
+        b = (byte)((b & 0xCC) >> 2 | (b & 0x33) << 2);
+        b = (byte)((b & 0xAA) >> 1 | (b & 0x55) << 1);
+        return b;
+    }
+
+    // ------------------------------------------------------------
+    // Pixel composition
+    // ------------------------------------------------------------
+    private void RenderPixelFromShifters()
     {
         int x = Cycle - 1;
         int y = Scanline;
 
-        byte bgColor = 0;
-        int bgPixel = 0;
         bool renderBg = (_ppumask & 0x08) != 0;
         bool renderSprites = (_ppumask & 0x10) != 0;
         bool renderLeft8Bg = (_ppumask & 0x02) != 0;
         bool renderLeft8Spr = (_ppumask & 0x04) != 0;
 
-        // Background rendering - use _v register for scroll position
+        byte finalColorIndex;
+
+        // -------------------------
+        // Background pixel
+        // -------------------------
+        int bgPixel = 0;
+        int bgPalette = 0;
+
         if (renderBg && (x >= 8 || renderLeft8Bg))
         {
-            // Extract scroll components from _v register
-            // _v format: 0yyy NNYY YYYX XXXX
-            int coarseX = _v & 0x001F;
-            int coarseY = (_v >> 5) & 0x001F;
-            int ntSelect = (_v >> 10) & 0x03;
-            int fineY = (_v >> 12) & 0x07;
+            // Use fine X to select bits from shifters
+            // Shifters are aligned so that bit 15 is the current pixel
+            int bit = 15 - _x;
 
-            // Calculate effective X position including fine X scroll
-            int effectiveX = x + _x;
-            int tileOffset = effectiveX >> 3;
-            int fineX = effectiveX & 7;
+            int p0 = (_bgShiftPatternLo >> bit) & 1;
+            int p1 = (_bgShiftPatternHi >> bit) & 1;
+            bgPixel = (p1 << 1) | p0;
 
-            // Calculate tile X with nametable switching
-            int totalTileX = coarseX + tileOffset;
-            int tileX = totalTileX & 0x1F;
-            int tileNt = ntSelect;
-            if (totalTileX >= 32)
-            {
-                tileNt ^= 0x01; // Switch horizontal nametable
-            }
-
-            ushort ntAddr = (ushort)(0x2000 + (tileNt << 10) + (coarseY << 5) + tileX);
-            byte tileIndex = ReadVram(ntAddr);
-
-            ushort patternBase = (ushort)((_ppuctrl & 0x10) != 0 ? 0x1000 : 0x0000);
-            ushort patternAddr = (ushort)(patternBase + (tileIndex << 4) + fineY);
-
-            byte patternLo = ReadVram(patternAddr);
-            byte patternHi = ReadVram((ushort)(patternAddr + 8));
-
-            int bit = 7 - fineX;
-            bgPixel = ((patternLo >> bit) & 1) | (((patternHi >> bit) & 1) << 1);
-
-            if (bgPixel != 0)
-            {
-                ushort attrAddr = (ushort)(0x23C0 + (tileNt << 10) + ((coarseY >> 2) << 3) + (tileX >> 2));
-                byte attr = ReadVram(attrAddr);
-                int shift = ((coarseY & 0x02) << 1) | (tileX & 0x02);
-                int palette = (attr >> shift) & 0x03;
-                bgColor = ReadVram((ushort)(0x3F00 + (palette << 2) + bgPixel));
-            }
-            else
-            {
-                bgColor = ReadVram(0x3F00);
-            }
-        }
-        else
-        {
-            bgColor = ReadVram(0x3F00);
+            int a0 = (_bgShiftAttrLo >> bit) & 1;
+            int a1 = (_bgShiftAttrHi >> bit) & 1;
+            bgPalette = (a1 << 1) | a0;
         }
 
-        // Sprite rendering
-        byte spriteColor = 0;
-        bool spritePriority = false;
-        bool spriteFound = false;
+        // -------------------------
+        // Sprite pixel and Sprite 0 hit detection
+        // -------------------------
+        int sprPixel = 0;
+        int sprPalette = 0;
+        bool sprPriorityBehindBg = false;
+        bool sprite0Hit = false;
 
         if (renderSprites && (x >= 8 || renderLeft8Spr))
         {
-            int spriteHeight = (_ppuctrl & 0x20) != 0 ? 16 : 8;
-            ushort spritePatternBase = (ushort)((_ppuctrl & 0x08) != 0 ? 0x1000 : 0x0000);
-
-            // Check all 64 sprites (in reverse order so sprite 0 has priority)
-            for (int i = 63; i >= 0; i--)
+            for (int i = 0; i < _sprCount; i++)
             {
-                int spriteY = _oam[i * 4 + 0] + 1;  // Sprite Y is actually Y-1
-                int tileIndex = _oam[i * 4 + 1];
-                int attributes = _oam[i * 4 + 2];
-                int spriteX = _oam[i * 4 + 3];
-
-                // Check if sprite is on this scanline
-                if (y < spriteY || y >= spriteY + spriteHeight)
+                if (_sprX[i] != 0)
                     continue;
 
-                // Check if sprite is at this X position
-                if (x < spriteX || x >= spriteX + 8)
+                int p0 = (_sprShiftLo[i] & 0x80) != 0 ? 1 : 0;
+                int p1 = (_sprShiftHi[i] & 0x80) != 0 ? 1 : 0;
+                int pix = (p1 << 1) | p0;
+
+                if (pix == 0)
                     continue;
 
-                int row = y - spriteY;
-                int col = x - spriteX;
-
-                // Vertical flip
-                if ((attributes & 0x80) != 0)
-                    row = spriteHeight - 1 - row;
-
-                // Horizontal flip
-                if ((attributes & 0x40) != 0)
-                    col = 7 - col;
-
-                // Get pattern address
-                ushort patternAddr;
-                if (spriteHeight == 16)
+                // Check sprite 0 hit - must check even if another sprite wins priority
+                // Sprite 0 hit occurs when sprite 0's opaque pixel overlaps opaque BG pixel
+                if (_sprite0OnScanline && _sprIndex[i] == 0 && bgPixel != 0 && x < 255)
                 {
-                    // 8x16 sprites: bit 0 of tile selects pattern table
-                    ushort base16 = (ushort)((tileIndex & 0x01) != 0 ? 0x1000 : 0x0000);
-                    int tileNum = tileIndex & 0xFE;
-                    if (row >= 8) { tileNum++; row -= 8; }
-                    patternAddr = (ushort)(base16 + (tileNum << 4) + row);
-                }
-                else
-                {
-                    patternAddr = (ushort)(spritePatternBase + (tileIndex << 4) + row);
+                    sprite0Hit = true;
                 }
 
-                byte patternLo = ReadVram(patternAddr);
-                byte patternHi = ReadVram((ushort)(patternAddr + 8));
-
-                int bit = 7 - col;
-                int pixel = ((patternLo >> bit) & 1) | (((patternHi >> bit) & 1) << 1);
-
-                if (pixel != 0)
+                // First visible sprite wins for rendering (OAM priority)
+                if (sprPixel == 0)
                 {
-                    int palette = (attributes & 0x03) + 4;  // Sprite palettes are 4-7
-                    spriteColor = ReadVram((ushort)(0x3F00 + (palette << 2) + pixel));
-                    spritePriority = (attributes & 0x20) != 0;  // Behind background
-                    spriteFound = true;
-
-                    // Sprite 0 hit detection
-                    if (i == 0 && bgPixel != 0 && x < 255 && renderBg)
-                    {
-                        _ppustatus |= 0x40;  // Set sprite 0 hit flag
-                    }
+                    sprPixel = pix;
+                    sprPalette = (_sprAttr[i] & 0x03) + 4; // sprite palettes 4-7
+                    sprPriorityBehindBg = (_sprAttr[i] & 0x20) != 0;
                 }
             }
         }
 
-        // Combine background and sprite
-        byte finalColor;
-        if (spriteFound && (!spritePriority || bgPixel == 0))
+        // Set sprite 0 hit flag
+        if (sprite0Hit)
         {
-            finalColor = spriteColor;
+            _ppustatus |= 0x40;
+        }
+
+        // -------------------------
+        // Final mux
+        // -------------------------
+        int colorIndex;
+
+        if (bgPixel == 0 && sprPixel == 0)
+        {
+            colorIndex = ReadVram(0x3F00) & 0x3F;
+        }
+        else if (bgPixel == 0 && sprPixel > 0)
+        {
+            colorIndex = ReadVram((ushort)(0x3F00 + (sprPalette << 2) + sprPixel)) & 0x3F;
+        }
+        else if (bgPixel > 0 && sprPixel == 0)
+        {
+            colorIndex = ReadVram((ushort)(0x3F00 + (bgPalette << 2) + bgPixel)) & 0x3F;
         }
         else
         {
-            finalColor = bgColor;
+            // both nonzero
+            if (sprPriorityBehindBg)
+                colorIndex = ReadVram((ushort)(0x3F00 + (bgPalette << 2) + bgPixel)) & 0x3F;
+            else
+                colorIndex = ReadVram((ushort)(0x3F00 + (sprPalette << 2) + sprPixel)) & 0x3F;
         }
 
+        finalColorIndex = (byte)(colorIndex & 0x3F);
+
         // Write pixel to framebuffer
-        uint color = NesPalette[finalColor & 0x3F];
-        int offset = (y * 256 + x) * 4;
-        Framebuffer[offset + 0] = (byte)(color & 0xFF);         // B
-        Framebuffer[offset + 1] = (byte)((color >> 8) & 0xFF);  // G
-        Framebuffer[offset + 2] = (byte)((color >> 16) & 0xFF); // R
-        Framebuffer[offset + 3] = 0xFF;                          // A
+        uint color = NesPalette[finalColorIndex];
+        int off = (y * 256 + x) * 4;
+        Framebuffer[off + 0] = (byte)(color & 0xFF);         // B
+        Framebuffer[off + 1] = (byte)((color >> 8) & 0xFF);  // G
+        Framebuffer[off + 2] = (byte)((color >> 16) & 0xFF); // R
+        Framebuffer[off + 3] = 0xFF;                         // A
     }
 
+    // ------------------------------------------------------------
+    // VBlank & NMI
+    // ------------------------------------------------------------
     private void EnterVBlank()
     {
         _ppustatus |= 0x80;
         if ((_ppuctrl & 0x80) != 0)
             _nmiPending = true;
+
         VBlankEvents++;
     }
 
