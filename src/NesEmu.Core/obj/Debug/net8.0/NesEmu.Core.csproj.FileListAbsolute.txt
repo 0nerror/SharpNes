@@ -9,3 +9,4 @@
 /media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Debug/net8.0/refint/NesEmu.Core.dll
 /media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Debug/net8.0/NesEmu.Core.pdb
 /media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Debug/net8.0/ref/NesEmu.Core.dll
+/media/chris-grant/CodersForge/RiderProjects/NesEmu/src/NesEmu.Core/obj/Debug/net8.0/NesEmu.Core.sourcelink.json

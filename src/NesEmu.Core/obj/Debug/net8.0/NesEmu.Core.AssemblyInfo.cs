@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NesEmu.Core")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b44fc67b10b8caf82aca2048c1bb09d1513e0ee6")]
 [assembly: System.Reflection.AssemblyProductAttribute("NesEmu.Core")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NesEmu.Core")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
