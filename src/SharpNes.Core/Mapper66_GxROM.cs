@@ -1,6 +1,6 @@
 using System;
 
-namespace NesEmu.Core;
+namespace SharpNes.Core;
 
 /// <summary>
 /// Mapper 66 (GxROM) - Simple PRG and CHR bank switching

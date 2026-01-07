@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NesEmu.Core;
+namespace SharpNes.Core;
 
 public sealed class Cartridge
 {

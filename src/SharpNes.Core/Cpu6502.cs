@@ -1,7 +1,7 @@
 using System;
 using System.Text;
 
-namespace NesEmu.Core;
+namespace SharpNes.Core;
 
 public sealed class Cpu6502
 {

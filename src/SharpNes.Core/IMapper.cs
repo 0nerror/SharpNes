@@ -1,4 +1,4 @@
-namespace NesEmu.Core;
+namespace SharpNes.Core;
 
 public interface IMapper
 {

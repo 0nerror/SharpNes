@@ -1,4 +1,4 @@
-namespace NesEmu.Core;
+namespace SharpNes.Core;
 
 /// <summary>
 /// Emulates a standard NES controller with serial read protocol.

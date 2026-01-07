@@ -1,7 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\NesEmu.Core\NesEmu.Core.csproj" />
+    <ProjectReference Include="..\SharpNes.Core\SharpNes.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

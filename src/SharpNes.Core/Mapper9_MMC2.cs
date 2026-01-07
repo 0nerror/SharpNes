@@ -1,6 +1,6 @@
 using System;
 
-namespace NesEmu.Core;
+namespace SharpNes.Core;
 
 /// <summary>
 /// Mapper 9 (MMC2) - Tile-based CHR bank switching

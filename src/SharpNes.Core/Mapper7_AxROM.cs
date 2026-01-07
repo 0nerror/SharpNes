@@ -1,40 +1,40 @@
 using System;
 
-namespace NesEmu.Core;
+namespace SharpNes.Core;
 
-public sealed class Mapper2_UxROM : IMapper
+/// <summary>
+/// Mapper 7 (AxROM) - 32KB PRG switching with single-screen mirroring
+/// Used by: Battletoads, Marble Madness, Wizards & Warriors
+/// </summary>
+public sealed class Mapper7_AxROM : IMapper
 {
     private readonly byte[] _prg;
     private readonly byte[] _chr;
     private readonly int _prgBanks;
-    private int _selectedBank;
+    private int _prgBank;
+    private int _mirrorMode; // 0 = lower, 1 = upper
 
-    public Mapper2_UxROM(byte[] prgRom, byte[] chrRomOrRam, int prgBanks, int chrBanks)
+    public int MirrorMode => _mirrorMode; // 0 or 1 for single-screen
+
+    public Mapper7_AxROM(byte[] prgRom, byte[] chrRomOrRam, int prgBanks, int chrBanks)
     {
         _prg = prgRom ?? throw new ArgumentNullException(nameof(prgRom));
         _chr = chrRomOrRam ?? throw new ArgumentNullException(nameof(chrRomOrRam));
         _prgBanks = prgBanks;
-        _selectedBank = 0;
+        _prgBank = 0;
+        _mirrorMode = 0;
     }
 
     public bool CpuRead(ushort addr, out byte data)
     {
         data = 0;
 
-        if (addr >= 0x8000 && addr <= 0xBFFF)
+        if (addr >= 0x8000)
         {
-            // Switchable 16KB bank
-            int offset = _selectedBank * 0x4000 + (addr - 0x8000);
-            data = _prg[offset];
-            return true;
-        }
-
-        if (addr >= 0xC000)
-        {
-            // Fixed to last 16KB bank
-            int lastBank = _prgBanks - 1;
-            int offset = lastBank * 0x4000 + (addr - 0xC000);
-            data = _prg[offset];
+            // 32KB switchable bank
+            int offset = _prgBank * 0x8000 + (addr - 0x8000);
+            if (offset < _prg.Length)
+                data = _prg[offset];
             return true;
         }
 
@@ -45,8 +45,10 @@ public sealed class Mapper2_UxROM : IMapper
     {
         if (addr >= 0x8000)
         {
-            // Bank select - only lower bits matter depending on ROM size
-            _selectedBank = data % _prgBanks;
+            // Bits 0-2: PRG bank (32KB)
+            _prgBank = data & 0x07;
+            // Bit 4: Mirroring (0=lower, 1=upper)
+            _mirrorMode = (data >> 4) & 0x01;
             return true;
         }
 
@@ -59,6 +61,7 @@ public sealed class Mapper2_UxROM : IMapper
 
         if (addr <= 0x1FFF)
         {
+            // 8KB CHR RAM (no banking)
             data = _chr[addr];
             return true;
         }
@@ -70,7 +73,7 @@ public sealed class Mapper2_UxROM : IMapper
     {
         if (addr <= 0x1FFF)
         {
-            // UxROM uses CHR RAM
+            // CHR RAM
             _chr[addr] = data;
             return true;
         }

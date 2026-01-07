@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using NesEmu.Core;
+using SharpNes.Core;
 using SDL2;
 
 static class Program
@@ -11,7 +11,7 @@ static class Program
     {
         if (args.Length < 1)
         {
-            Console.WriteLine("Usage: NesEmu.App <path-to-rom.nes>");
+            Console.WriteLine("Usage: dotnet run --project src/SharpNes.App/SharpNes.App.csproj -- <path-to-rom.nes>");
             return 1;
         }
 
@@ -54,7 +54,7 @@ static class Program
         // Create window (3x scale)
         const int scale = 3;
         IntPtr window = SDL.SDL_CreateWindow(
-            $"NesEmu - {Path.GetFileName(romPath)}",
+            $"SharpNes - {Path.GetFileName(romPath)}",
             SDL.SDL_WINDOWPOS_CENTERED,
             SDL.SDL_WINDOWPOS_CENTERED,
             256 * scale,

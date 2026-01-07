@@ -1,5 +1,7 @@
 using System;
 
+namespace SharpNes.Core;
+
 public sealed class Ppu
 {
     // Framebuffer: 256x240 pixels, ARGB format

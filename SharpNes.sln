@@ -1,13 +1,13 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NesEmu.Core", "src\NesEmu.Core\NesEmu.Core.csproj", "{AB3293A9-B018-4015-9C44-5CBE07378A41}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpNes.Core", "src\SharpNes.Core\SharpNes.Core.csproj", "{AB3293A9-B018-4015-9C44-5CBE07378A41}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NesEmu.App", "src\NesEmu.App\NesEmu.App.csproj", "{BCA02E4C-3FC1-4AD8-A1CB-EDCD45840012}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpNes.App", "src\SharpNes.App\SharpNes.App.csproj", "{BCA02E4C-3FC1-4AD8-A1CB-EDCD45840012}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
