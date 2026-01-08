@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -208,5 +209,39 @@ public sealed class Mapper1_MMC1 : IMapper
         }
 
         return false;
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        writer.Write(_prgRam);
+        writer.Write(_shiftRegister);
+        writer.Write(_shiftCount);
+        writer.Write(_control);
+        writer.Write(_chrBank0);
+        writer.Write(_chrBank1);
+        writer.Write(_prgBank);
+
+        // Save CHR RAM if present
+        if (_chrBanks == 0)
+        {
+            writer.Write(_chr);
+        }
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        reader.Read(_prgRam, 0, _prgRam.Length);
+        _shiftRegister = reader.ReadByte();
+        _shiftCount = reader.ReadInt32();
+        _control = reader.ReadByte();
+        _chrBank0 = reader.ReadByte();
+        _chrBank1 = reader.ReadByte();
+        _prgBank = reader.ReadByte();
+
+        // Load CHR RAM if present
+        if (_chrBanks == 0)
+        {
+            reader.Read(_chr, 0, _chr.Length);
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -805,5 +806,89 @@ public sealed class Ppu
                 return true;
         }
         return false;
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        // VRAM and palette
+        writer.Write(_vram);
+        writer.Write(_paletteRam);
+        writer.Write(_oam);
+
+        // Registers
+        writer.Write(_ppuctrl);
+        writer.Write(_ppumask);
+        writer.Write(_ppustatus);
+        writer.Write(_oamaddr);
+
+        // Internal registers
+        writer.Write(_v);
+        writer.Write(_t);
+        writer.Write(_x);
+        writer.Write(_w);
+
+        // Data buffer
+        writer.Write(_ppudataBuffer);
+        writer.Write(_openBus);
+
+        // Timing
+        writer.Write(Scanline);
+        writer.Write(Cycle);
+        writer.Write(TotalPpuCycles);
+
+        // NMI
+        writer.Write(_nmiPending);
+
+        // Background shifters
+        writer.Write(_bgShiftPatternLo);
+        writer.Write(_bgShiftPatternHi);
+        writer.Write(_bgShiftAttrLo);
+        writer.Write(_bgShiftAttrHi);
+        writer.Write(_bgNextTileId);
+        writer.Write(_bgNextTileAttr);
+        writer.Write(_bgNextTileLsb);
+        writer.Write(_bgNextTileMsb);
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        // VRAM and palette
+        reader.Read(_vram, 0, _vram.Length);
+        reader.Read(_paletteRam, 0, _paletteRam.Length);
+        reader.Read(_oam, 0, _oam.Length);
+
+        // Registers
+        _ppuctrl = reader.ReadByte();
+        _ppumask = reader.ReadByte();
+        _ppustatus = reader.ReadByte();
+        _oamaddr = reader.ReadByte();
+
+        // Internal registers
+        _v = reader.ReadUInt16();
+        _t = reader.ReadUInt16();
+        _x = reader.ReadByte();
+        _w = reader.ReadBoolean();
+
+        // Data buffer
+        _ppudataBuffer = reader.ReadByte();
+        _openBus = reader.ReadByte();
+
+        // Timing
+        Scanline = reader.ReadInt32();
+        Cycle = reader.ReadInt32();
+        TotalPpuCycles = reader.ReadInt64();
+
+        // NMI
+        _nmiPending = reader.ReadBoolean();
+
+        // Background shifters
+        _bgShiftPatternLo = reader.ReadUInt16();
+        _bgShiftPatternHi = reader.ReadUInt16();
+        _bgShiftAttrLo = reader.ReadUInt16();
+        _bgShiftAttrHi = reader.ReadUInt16();
+        _bgNextTileId = reader.ReadByte();
+        _bgNextTileAttr = reader.ReadByte();
+        _bgNextTileLsb = reader.ReadByte();
+        _bgNextTileMsb = reader.ReadByte();
     }
 }

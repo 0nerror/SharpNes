@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -576,5 +577,176 @@ public sealed class Apu
         {
             divider--;
         }
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        // Pulse 1
+        writer.Write(_pulse1Duty);
+        writer.Write(_pulse1Volume);
+        writer.Write(_pulse1Constant);
+        writer.Write(_pulse1Halt);
+        writer.Write(_pulse1Enabled);
+        writer.Write(_pulse1Timer);
+        writer.Write(_pulse1TimerValue);
+        writer.Write(_pulse1Sequence);
+        writer.Write(_pulse1LengthCounter);
+        writer.Write(_pulse1SweepEnabled);
+        writer.Write(_pulse1SweepPeriod);
+        writer.Write(_pulse1SweepNegate);
+        writer.Write(_pulse1SweepShift);
+        writer.Write(_pulse1SweepDivider);
+        writer.Write(_pulse1SweepReload);
+        writer.Write(_pulse1EnvelopeVolume);
+        writer.Write(_pulse1EnvelopeDivider);
+        writer.Write(_pulse1EnvelopeStart);
+
+        // Pulse 2
+        writer.Write(_pulse2Duty);
+        writer.Write(_pulse2Volume);
+        writer.Write(_pulse2Constant);
+        writer.Write(_pulse2Halt);
+        writer.Write(_pulse2Enabled);
+        writer.Write(_pulse2Timer);
+        writer.Write(_pulse2TimerValue);
+        writer.Write(_pulse2Sequence);
+        writer.Write(_pulse2LengthCounter);
+        writer.Write(_pulse2SweepEnabled);
+        writer.Write(_pulse2SweepPeriod);
+        writer.Write(_pulse2SweepNegate);
+        writer.Write(_pulse2SweepShift);
+        writer.Write(_pulse2SweepDivider);
+        writer.Write(_pulse2SweepReload);
+        writer.Write(_pulse2EnvelopeVolume);
+        writer.Write(_pulse2EnvelopeDivider);
+        writer.Write(_pulse2EnvelopeStart);
+
+        // Triangle
+        writer.Write(_triangleEnabled);
+        writer.Write(_triangleTimer);
+        writer.Write(_triangleTimerValue);
+        writer.Write(_triangleSequence);
+        writer.Write(_triangleLengthCounter);
+
+        // Noise
+        writer.Write(_noiseEnabled);
+        writer.Write(_noiseTimer);
+        writer.Write(_noiseTimerValue);
+        writer.Write(_noiseShift);
+        writer.Write(_noiseMode);
+        writer.Write(_noiseVolume);
+        writer.Write(_noiseConstant);
+        writer.Write(_noiseHalt);
+        writer.Write(_noiseLengthCounter);
+        writer.Write(_noiseEnvelopeVolume);
+        writer.Write(_noiseEnvelopeDivider);
+        writer.Write(_noiseEnvelopeStart);
+
+        // DMC
+        writer.Write(_dmcEnabled);
+        writer.Write(_dmcIrqEnabled);
+        writer.Write(_dmcLoop);
+        writer.Write(_dmcTimer);
+        writer.Write(_dmcTimerValue);
+        writer.Write(_dmcOutput);
+        writer.Write(_dmcSampleAddress);
+        writer.Write(_dmcSampleAddressStart);
+        writer.Write(_dmcSampleLength);
+        writer.Write(_dmcSampleLengthStart);
+        writer.Write(_dmcSampleBuffer);
+        writer.Write(_dmcBitsRemaining);
+        writer.Write(_dmcSilence);
+
+        // Frame counter
+        writer.Write(_frameCounter);
+        writer.Write(_frameStep);
+        writer.Write(_apuClockToggle);
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        // Pulse 1
+        _pulse1Duty = reader.ReadByte();
+        _pulse1Volume = reader.ReadByte();
+        _pulse1Constant = reader.ReadBoolean();
+        _pulse1Halt = reader.ReadBoolean();
+        _pulse1Enabled = reader.ReadBoolean();
+        _pulse1Timer = reader.ReadUInt16();
+        _pulse1TimerValue = reader.ReadUInt16();
+        _pulse1Sequence = reader.ReadInt32();
+        _pulse1LengthCounter = reader.ReadByte();
+        _pulse1SweepEnabled = reader.ReadBoolean();
+        _pulse1SweepPeriod = reader.ReadByte();
+        _pulse1SweepNegate = reader.ReadBoolean();
+        _pulse1SweepShift = reader.ReadByte();
+        _pulse1SweepDivider = reader.ReadByte();
+        _pulse1SweepReload = reader.ReadBoolean();
+        _pulse1EnvelopeVolume = reader.ReadByte();
+        _pulse1EnvelopeDivider = reader.ReadByte();
+        _pulse1EnvelopeStart = reader.ReadBoolean();
+
+        // Pulse 2
+        _pulse2Duty = reader.ReadByte();
+        _pulse2Volume = reader.ReadByte();
+        _pulse2Constant = reader.ReadBoolean();
+        _pulse2Halt = reader.ReadBoolean();
+        _pulse2Enabled = reader.ReadBoolean();
+        _pulse2Timer = reader.ReadUInt16();
+        _pulse2TimerValue = reader.ReadUInt16();
+        _pulse2Sequence = reader.ReadInt32();
+        _pulse2LengthCounter = reader.ReadByte();
+        _pulse2SweepEnabled = reader.ReadBoolean();
+        _pulse2SweepPeriod = reader.ReadByte();
+        _pulse2SweepNegate = reader.ReadBoolean();
+        _pulse2SweepShift = reader.ReadByte();
+        _pulse2SweepDivider = reader.ReadByte();
+        _pulse2SweepReload = reader.ReadBoolean();
+        _pulse2EnvelopeVolume = reader.ReadByte();
+        _pulse2EnvelopeDivider = reader.ReadByte();
+        _pulse2EnvelopeStart = reader.ReadBoolean();
+
+        // Triangle
+        _triangleEnabled = reader.ReadBoolean();
+        _triangleTimer = reader.ReadUInt16();
+        _triangleTimerValue = reader.ReadUInt16();
+        _triangleSequence = reader.ReadInt32();
+        _triangleLengthCounter = reader.ReadByte();
+
+        // Noise
+        _noiseEnabled = reader.ReadBoolean();
+        _noiseTimer = reader.ReadUInt16();
+        _noiseTimerValue = reader.ReadUInt16();
+        _noiseShift = reader.ReadUInt16();
+        _noiseMode = reader.ReadBoolean();
+        _noiseVolume = reader.ReadByte();
+        _noiseConstant = reader.ReadBoolean();
+        _noiseHalt = reader.ReadBoolean();
+        _noiseLengthCounter = reader.ReadByte();
+        _noiseEnvelopeVolume = reader.ReadByte();
+        _noiseEnvelopeDivider = reader.ReadByte();
+        _noiseEnvelopeStart = reader.ReadBoolean();
+
+        // DMC
+        _dmcEnabled = reader.ReadBoolean();
+        _dmcIrqEnabled = reader.ReadBoolean();
+        _dmcLoop = reader.ReadBoolean();
+        _dmcTimer = reader.ReadUInt16();
+        _dmcTimerValue = reader.ReadUInt16();
+        _dmcOutput = reader.ReadByte();
+        _dmcSampleAddress = reader.ReadUInt16();
+        _dmcSampleAddressStart = reader.ReadUInt16();
+        _dmcSampleLength = reader.ReadInt32();
+        _dmcSampleLengthStart = reader.ReadInt32();
+        _dmcSampleBuffer = reader.ReadByte();
+        _dmcBitsRemaining = reader.ReadInt32();
+        _dmcSilence = reader.ReadBoolean();
+
+        // Frame counter
+        _frameCounter = reader.ReadInt32();
+        _frameStep = reader.ReadInt32();
+        _apuClockToggle = reader.ReadBoolean();
+
+        // Clear audio buffer
+        _sampleIndex = 0;
     }
 }

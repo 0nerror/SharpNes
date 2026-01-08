@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -76,5 +77,23 @@ public sealed class Mapper0_Nrom : IMapper
         }
 
         return false;
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        // Save CHR RAM if present
+        if (_chrBanks == 0)
+        {
+            writer.Write(_chr);
+        }
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        // Load CHR RAM if present
+        if (_chrBanks == 0)
+        {
+            reader.Read(_chr, 0, _chr.Length);
+        }
     }
 }

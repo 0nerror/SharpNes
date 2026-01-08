@@ -16,6 +16,7 @@ static class Program
         Bus? bus = null;
         Cpu6502? cpu = null;
         string? currentRomName = null;
+        string? currentRomPath = null;  // Full path for save state file naming
 
         // Load ROM if provided via command line
         if (romPath != null)
@@ -30,6 +31,7 @@ static class Program
             {
                 return 1;
             }
+            currentRomPath = romPath;
         }
 
         // Initialize SDL
@@ -224,6 +226,7 @@ static class Program
                                         {
                                             if (TryLoadRom(result.Path, out bus, out cpu, out currentRomName))
                                             {
+                                                currentRomPath = result.Path;
                                                 SetupPpuSyncCallback(bus!, cpu!);
                                                 SDL.SDL_SetWindowTitle(window, $"SharpNes - {currentRomName}");
 
@@ -267,6 +270,7 @@ static class Program
                                         bus = null;
                                         cpu = null;
                                         currentRomName = null;
+                                        currentRomPath = null;
                                         Console.WriteLine("Stopped - ROM unloaded");
 
                                         // Clear audio queue
@@ -281,6 +285,89 @@ static class Program
                                         // Reset frame timing
                                         frameTimer.Restart();
                                         nextFrameTime = 0;
+                                    }
+                                    break;
+
+                                case SDL.SDL_Keycode.SDLK_F4:
+                                    if (pressed && bus != null && cpu != null && currentRomPath != null)
+                                    {
+                                        // Save state
+                                        string saveStatePath = currentRomPath + ".state";
+                                        try
+                                        {
+                                            using (var fs = new FileStream(saveStatePath, FileMode.Create))
+                                            using (var writer = new BinaryWriter(fs))
+                                            {
+                                                // Write header/version
+                                                writer.Write("SHARPNES");
+                                                writer.Write((int)1); // Version
+
+                                                // Save CPU state
+                                                cpu.SaveState(writer);
+
+                                                // Save Bus state (includes PPU, APU, RAM, Mapper)
+                                                bus.SaveState(writer);
+                                            }
+                                            Console.WriteLine($"State saved to {saveStatePath}");
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Console.WriteLine($"Failed to save state: {ex.Message}");
+                                        }
+                                    }
+                                    break;
+
+                                case SDL.SDL_Keycode.SDLK_F5:
+                                    if (pressed && bus != null && cpu != null && currentRomPath != null)
+                                    {
+                                        // Load state
+                                        string saveStatePath = currentRomPath + ".state";
+                                        if (File.Exists(saveStatePath))
+                                        {
+                                            try
+                                            {
+                                                using (var fs = new FileStream(saveStatePath, FileMode.Open))
+                                                using (var reader = new BinaryReader(fs))
+                                                {
+                                                    // Read and verify header
+                                                    string header = reader.ReadString();
+                                                    int version = reader.ReadInt32();
+
+                                                    if (header != "SHARPNES" || version != 1)
+                                                    {
+                                                        Console.WriteLine("Invalid save state file");
+                                                    }
+                                                    else
+                                                    {
+                                                        // Load CPU state
+                                                        cpu.LoadState(reader);
+
+                                                        // Load Bus state (includes PPU, APU, RAM, Mapper)
+                                                        bus.LoadState(reader);
+
+                                                        Console.WriteLine($"State loaded from {saveStatePath}");
+
+                                                        // Clear audio queue for clean start
+                                                        if (audioDevice != 0)
+                                                        {
+                                                            SDL.SDL_ClearQueuedAudio(audioDevice);
+                                                        }
+
+                                                        // Reset frame timing
+                                                        frameTimer.Restart();
+                                                        nextFrameTime = 0;
+                                                    }
+                                                }
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                Console.WriteLine($"Failed to load state: {ex.Message}");
+                                            }
+                                        }
+                                        else
+                                        {
+                                            Console.WriteLine($"No save state found: {saveStatePath}");
+                                        }
                                     }
                                     break;
 

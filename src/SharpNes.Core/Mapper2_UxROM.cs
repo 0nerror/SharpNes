@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -76,5 +77,17 @@ public sealed class Mapper2_UxROM : IMapper
         }
 
         return false;
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        writer.Write(_selectedBank);
+        writer.Write(_chr);  // CHR RAM
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        _selectedBank = reader.ReadInt32();
+        reader.Read(_chr, 0, _chr.Length);
     }
 }

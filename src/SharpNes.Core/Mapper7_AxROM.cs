@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -102,5 +103,19 @@ public sealed class Mapper7_AxROM : IMapper
         }
 
         return false;
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        writer.Write(_prgBank);
+        writer.Write(_mirrorMode);
+        writer.Write(_chr);  // CHR RAM
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        _prgBank = reader.ReadInt32();
+        _mirrorMode = reader.ReadInt32();
+        reader.Read(_chr, 0, _chr.Length);
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -74,5 +75,17 @@ public sealed class Mapper66_GxROM : IMapper
     {
         // GxROM uses CHR ROM
         return false;
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        writer.Write(_prgBank);
+        writer.Write(_chrBank);
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        _prgBank = reader.ReadInt32();
+        _chrBank = reader.ReadInt32();
     }
 }

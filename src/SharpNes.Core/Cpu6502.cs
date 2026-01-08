@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text;
 
 namespace SharpNes.Core;
@@ -1299,5 +1300,27 @@ public sealed class Cpu6502
             default:
                 throw new NotSupportedException($"Opcode ${opcode:X2} not implemented yet at PC=${(PC - 1):X4}");
         }
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        writer.Write(A);
+        writer.Write(X);
+        writer.Write(Y);
+        writer.Write(SP);
+        writer.Write(PC);
+        writer.Write((byte)P);
+        writer.Write(TotalCycles);
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        A = reader.ReadByte();
+        X = reader.ReadByte();
+        Y = reader.ReadByte();
+        SP = reader.ReadByte();
+        PC = reader.ReadUInt16();
+        P = (StatusFlags)reader.ReadByte();
+        TotalCycles = reader.ReadInt64();
     }
 }

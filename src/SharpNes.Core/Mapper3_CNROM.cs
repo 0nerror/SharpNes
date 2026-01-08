@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -81,5 +82,15 @@ public sealed class Mapper3_CNROM : IMapper
     {
         // CNROM uses CHR ROM, not RAM
         return false;
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        writer.Write(_chrBank);
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        _chrBank = reader.ReadInt32();
     }
 }

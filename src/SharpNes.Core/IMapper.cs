@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace SharpNes.Core;
 
 public interface IMapper
@@ -13,4 +15,8 @@ public interface IMapper
     // Mirroring mode: 0=one-screen lower, 1=one-screen upper, 2=vertical, 3=horizontal
     // Return -1 to use ROM header mirroring
     int MirrorMode => -1;
+
+    // Save state support
+    void SaveState(BinaryWriter writer);
+    void LoadState(BinaryReader reader);
 }

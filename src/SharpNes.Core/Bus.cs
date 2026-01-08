@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -181,4 +182,42 @@ public sealed class Bus
 
     // Expose RAM for debugging
     public byte[] GetRam() => _ram;
+
+    public void SaveState(BinaryWriter writer)
+    {
+        // Save RAM
+        writer.Write(_ram);
+
+        // Save OAM DMA state
+        writer.Write(OamDmaRequested);
+        writer.Write(OamDmaPage);
+
+        // Save PPU state
+        Ppu.SaveState(writer);
+
+        // Save APU state
+        Apu.SaveState(writer);
+
+        // Save mapper state
+        _cart?.Mapper.SaveState(writer);
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        // Load RAM
+        reader.Read(_ram, 0, _ram.Length);
+
+        // Load OAM DMA state
+        OamDmaRequested = reader.ReadBoolean();
+        OamDmaPage = reader.ReadByte();
+
+        // Load PPU state
+        Ppu.LoadState(reader);
+
+        // Load APU state
+        Apu.LoadState(reader);
+
+        // Load mapper state
+        _cart?.Mapper.LoadState(reader);
+    }
 }

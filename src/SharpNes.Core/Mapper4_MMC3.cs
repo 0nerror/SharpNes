@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -267,5 +268,57 @@ public sealed class Mapper4_MMC3 : IMapper
         bool was = IrqPending;
         IrqPending = false;
         return was;
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        writer.Write(_prgRam);
+
+        // Bank registers
+        for (int i = 0; i < 8; i++)
+            writer.Write(_bankRegisters[i]);
+        writer.Write(_bankSelect);
+        writer.Write(_prgBankMode);
+        writer.Write(_chrInversion);
+        writer.Write(_mirrorMode);
+
+        // IRQ state
+        writer.Write(_irqLatch);
+        writer.Write(_irqCounter);
+        writer.Write(_irqEnabled);
+        writer.Write(_irqReload);
+        writer.Write(IrqPending);
+
+        // CHR RAM if present
+        if (_chrBanks == 0)
+        {
+            writer.Write(_chr);
+        }
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        reader.Read(_prgRam, 0, _prgRam.Length);
+
+        // Bank registers
+        for (int i = 0; i < 8; i++)
+            _bankRegisters[i] = reader.ReadInt32();
+        _bankSelect = reader.ReadInt32();
+        _prgBankMode = reader.ReadBoolean();
+        _chrInversion = reader.ReadBoolean();
+        _mirrorMode = reader.ReadInt32();
+
+        // IRQ state
+        _irqLatch = reader.ReadByte();
+        _irqCounter = reader.ReadByte();
+        _irqEnabled = reader.ReadBoolean();
+        _irqReload = reader.ReadBoolean();
+        IrqPending = reader.ReadBoolean();
+
+        // CHR RAM if present
+        if (_chrBanks == 0)
+        {
+            reader.Read(_chr, 0, _chr.Length);
+        }
     }
 }

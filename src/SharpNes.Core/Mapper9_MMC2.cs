@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace SharpNes.Core;
 
@@ -255,5 +256,33 @@ public sealed class Mapper9_MMC2 : IMapper
     {
         // MMC2 uses CHR ROM, not RAM (for Punch-Out!!)
         return false;
+    }
+
+    public void SaveState(BinaryWriter writer)
+    {
+        writer.Write(_prgBank);
+        writer.Write(_chrBank0FD);
+        writer.Write(_chrBank0FE);
+        writer.Write(_chrBank1FD);
+        writer.Write(_chrBank1FE);
+        writer.Write(_latch0);
+        writer.Write(_latch1);
+        writer.Write(_mirrorMode);
+    }
+
+    public void LoadState(BinaryReader reader)
+    {
+        _prgBank = reader.ReadInt32();
+        _chrBank0FD = reader.ReadInt32();
+        _chrBank0FE = reader.ReadInt32();
+        _chrBank1FD = reader.ReadInt32();
+        _chrBank1FE = reader.ReadInt32();
+        _latch0 = reader.ReadBoolean();
+        _latch1 = reader.ReadBoolean();
+        _mirrorMode = reader.ReadInt32();
+
+        // Reset caches
+        _cachedAddr0 = -1;
+        _cachedAddr1 = -1;
     }
 }
